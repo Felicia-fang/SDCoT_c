@@ -1,5 +1,4 @@
 ## Setup
-
     ```
     conda create -n sdc1 python==3.6.8
     conda install pytorch==1.1.0 torchvision==0.3.0 cudatoolkit=10.0 -c pytorch
@@ -23,3 +22,17 @@
 - setuptools==58.0.4
 - torch==1.1.0
 - trimesh==2.35.39
+## Setup
+- Install `python` --This repo is tested with `python 3.6.8`.
+- Install `pytorch` with CUDA -- This repo is tested with `torch 1.1`, `CUDA 9.0`. 
+It may wrk with newer versions, but that is not gauranteed.
+- Install Tensorboard -- This repo is tested with `tensorboard 1.14.0`.
+- Compile the CUDA layers for PointNet++, which is used in the backbone network:
+    ```
+    cd pointnet2
+    python setup.py install
+    ```
+- Install dependencies
+    ```
+    pip install -r requirements.txt
+    ```
