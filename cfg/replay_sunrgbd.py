@@ -1,14 +1,8 @@
-''' Global configurations of SUN RGB-D dataset.
-
-Author: Zhao Na
-Data: September, 2020
-'''
-
 import os
 import numpy as np
 import pickle
 from easydict import EasyDict
-
+import random
 
 __C = EasyDict()
 cfg = __C
@@ -41,9 +35,9 @@ __C.NUM_BASE_CLASSES = 7
 __C.BASE_TYPES = ['bathtub', 'bed', 'bookshelf', 'chair', 'desk', 'dresser', 'night_stand']
 __C.BASE_CLASSES = [0, 1, 2, 3, 4, 5, 6]
 
-__C.NUM_NOVEL_CLASSES = 3
-__C.NOVEL_TYPES = [ 'sofa', 'table', 'toilet']
-__C.NOVEL_CLASSES = [7, 8, 9]
+__C.NUM_NOVEL_CLASSES = 10
+__C.NOVEL_TYPES = [ 'bathtub', 'bed', 'bookshelf', 'chair', 'desk', 'dresser', 'night_stand','sofa', 'table', 'toilet']
+__C.NOVEL_CLASSES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 
 def get_class2scans(data_path, split='train'):
@@ -57,6 +51,28 @@ def get_class2scans(data_path, split='train'):
     if os.path.exists(class2scans_file):
         with open(class2scans_file, 'rb') as f:
             class2scans = pickle.load(f)
+            print(class2scans)
+            # # 4895
+            # print(len(class2scans['bathtub'])+len(class2scans['bed'])+len(class2scans['bookshelf'])+len(class2scans['chair'])+len(class2scans['desk'])+len(class2scans['dresser'])+len(class2scans['night_stand']))
+            # # 4485
+            # print(len(class2scans['bathtub'])+len(class2scans['bed'])+len(class2scans['bookshelf'])+len(class2scans['chair'])+len(class2scans['desk']))
+            # for x in class2scans:
+            #     print(x)
+            #     print(x.value)
+            keys_to_process = ['bathtub', 'bed', 'bookshelf', 'chair', 'desk', 'dresser', 'night_stand']
+            new_data = {}
+            for key in keys_to_process:
+                original_list = class2scans[key]
+                sample_size = int(0.05 * len(original_list))
+                random_sample = random.sample(original_list, sample_size)
+                new_data[key] = random_sample
+            for key in new_data:
+                class2scans[key] = new_data[key]
+            print(len(class2scans['bathtub'])+len(class2scans['bed'])+len(class2scans['bookshelf'])+len(class2scans['chair'])+len(class2scans['desk'])+len(class2scans['dresser'])+len(class2scans['night_stand']))
+            print(len(class2scans['sofa'  ])+len(class2scans['table'])+len(class2scans['toilet']))
+            print(class2scans)
+
+
     else:
         class2scans = {c: [] for c in __C.TYPE_WHITELIST}
         scan_data_path = os.path.join(data_path, 'sunrgbd_%s_pc_bbox_50k_%s' %('v1' if __C.USE_V1 else 'v2', split))

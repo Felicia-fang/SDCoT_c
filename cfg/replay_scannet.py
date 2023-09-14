@@ -1,13 +1,8 @@
-''' Global configurations of ScanNet dataset.
-
-Author: Zhao Na
-Data: September, 2020
-'''
-
 import os
 import numpy as np
 import pickle
 from easydict import EasyDict
+import random
 
 __C = EasyDict()
 cfg = __C
@@ -71,6 +66,19 @@ def get_class2scans(data_path, split='train'):
     if os.path.exists(class2scans_file):
         with open(class2scans_file, 'rb') as f:
             class2scans = pickle.load(f)
+            # print(class2scans)
+            keys_to_process = ['bathtub', 'bed', 'bookshelf', 'cabinet', 'chair', 'counter', 'curtain', 'desk', 'door','otherfurniture']
+            new_data = {}
+            for key in keys_to_process:
+                original_list = class2scans[key]
+                sample_size = int(0.05 * len(original_list))
+                random_sample = random.sample(original_list, sample_size)
+                new_data[key] = random_sample
+            for key in new_data:
+                class2scans[key] = new_data[key]
+            for class_name in __C.TYPE_WHITELIST:
+                print('\t class_name: {0} | num of scans: {1}'.format(class_name, len(class2scans[class_name])))
+            # print(class2scans)
     else:
         class2scans = {c: [] for c in __C.TYPE_WHITELIST}
         all_scan_names = list(set([os.path.basename(x)[0:12] \
