@@ -17,6 +17,8 @@ from eval_det import get_iou_obb
 from nms import nms_2d_faster, nms_3d_faster, nms_3d_faster_samecls
 from box_util import get_3d_box, extract_pc_in_box3d, get_3d_box_depth
 from model_util import class2size, class2angle
+from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 
 
 def flip_axis_to_camera(pc):
@@ -58,6 +60,7 @@ def parse_prediction_to_pseudo_bboxes(end_points, config_dict, point_clouds):
     Returns:
         pred_bboxes: numpy array with shape (num_valid_detections, 8), each colomn is with (x,y,z,l,w,h,heading angle, class_ind)
     """
+    # print('parse_prediction_to_pseudo_bboxes')
     pred_center = end_points['center'].squeeze(0)  # num_proposal,3
     pred_heading_class = torch.argmax(end_points['heading_scores'], -1)  # 1, num_proposal
     pred_heading_residual = torch.gather(end_points['heading_residuals'], 2,
@@ -65,7 +68,76 @@ def parse_prediction_to_pseudo_bboxes(end_points, config_dict, point_clouds):
     pred_heading_class.squeeze_(0)
     pred_sem_cls = end_points['sem_cls'].squeeze(0) # num_proposal
     pred_sem_cls_probs = torch.softmax(end_points['sem_cls_scores'], dim=2)  # B, num_proposal, num_class
-    pred_sem_cls_probs = torch.max(pred_sem_cls_probs.squeeze(0), dim=1)[0]
+    # print('pred_sem_cls_probs.shape', pred_sem_cls_probs.shape)
+
+    # pred_sem_cls_probs = torch.max(pred_sem_cls_probs.squeeze(0), dim=1)[0]
+    choose=0
+    if choose==0:#set threshold=0
+        pred_sem_cls_probs = torch.max(pred_sem_cls_probs.squeeze(0), dim=1)[0]
+    if choose ==1:  #flexmatch
+        pred_sem_cls_probs, pred_sem_cls_max_indices = torch.max(pred_sem_cls_probs.squeeze(0), dim=1)
+        # print("pred_sem_cls_max_values.shape", pred_sem_cls_probs)
+        # print("pred_sem_cls_max_indices.shape", pred_sem_cls_max_indices)
+        counts = torch.zeros(14, dtype=torch.int32)
+
+        indices_array = pred_sem_cls_max_indices.cpu().numpy()
+        txt_file_path = "threshold_data.txt"
+
+        for index in indices_array:
+            if 0 <= index < 14:
+                counts[index] += 1
+        # 指定日志文件保存的目录
+        log_dir = "./logs_flexmatch"
+
+        # 创建SummaryWriter对象
+        writer = SummaryWriter(log_dir)
+
+        max_count = torch.max(counts).item()
+        normalized_counts = counts.float() / max_count
+        with open(txt_file_path, 'a') as txt_file:
+            for i in range(14):
+                threshold = config_dict['obj_conf_thresh']*normalized_counts[i].item()
+                writer.add_scalar(f"class_{i}/threshold", threshold)
+                txt_file.write(f"class_{i}/threshold: {threshold}\n")
+                # writer.add_scalar(f"class {i} threshold: {config_dict['obj_conf_thresh']*normalized_counts[i].item()}")
+                # print(f"class {i} threshold: {config_dict['obj_conf_thresh']*normalized_counts[i].item()}")
+
+                # print('pred_sem_cls_probs.shape', pred_sem_cls_probs.shape)
+    elif choose ==2:  #freematch
+        if config_dict['obj_conf_thresh']==0.95:
+            config_dict['obj_conf_thresh'] = np.full(15, 1/14, dtype=np.float32)
+            
+        pred_sem_cls_probs, pred_sem_cls_max_indices = torch.max(pred_sem_cls_probs.squeeze(0), dim=1)
+        max_pred_sem_cls_probs = torch.max(pred_sem_cls_probs).item()
+        config_dict['obj_conf_thresh'][0]=max_pred_sem_cls_probs*0.3+config_dict['obj_conf_thresh'][0]*0.7#怎么保证不大于1的
+        num_classes = 14  
+        class_means = []
+
+        for class_idx in range(num_classes):
+            # find the matching index with the current category
+            matching_indices = (pred_sem_cls_max_indices == class_idx).nonzero()
+            
+            if len(matching_indices) > 0:
+                matching_indices = matching_indices.view(-1)
+                # use these indexes to get the corresponding probability values
+                matching_probs = pred_sem_cls_probs[matching_indices]
+                # compute the mean
+                class_mean = matching_probs.mean().item()
+                class_means.append(class_mean)
+            else:
+                # if there is no matching index, the mean is 0
+                class_means.append(0.0)
+
+        class_means = torch.tensor(class_means, device='cuda:0')
+        max_value = max(class_means)
+        class_means_normalized = [x / max_value for x in class_means]
+        print(class_means_normalized)
+        for i in range(14):
+            config_dict['obj_conf_thresh'][i + 1] = config_dict['obj_conf_thresh'][i + 1]*0.7+class_means_normalized[i]*0.3
+        # create a breakpoint here
+        import pdb;pdb.set_trace()
+    elif choose ==3:  #softmatch
+        pred_sem_cls_probs, pred_sem_cls_max_indices = torch.max(pred_sem_cls_probs.squeeze(0), dim=1)
     pred_size_residual = end_points['size_residuals'].squeeze(0)  # num_proposal,3
 
     pred_center = pred_center.detach().cpu().numpy()
@@ -162,7 +234,14 @@ def parse_prediction_to_pseudo_bboxes(end_points, config_dict, point_clouds):
     pred_bboxes = []  # a list (len: num of predictions) of pred_box_params
     conf_scores = []
     for i in range(K):
-        if pred_mask[i] == 1 and obj_prob[i] > config_dict['obj_conf_thresh'] and \
+        # print("thresh",config_dict['obj_conf_thresh']*normalized_counts[pred_sem_cls_max_indices[i]])
+        if choose==0:
+            threshold_new=0
+        elif choose == 1:
+            threshold_new=config_dict['obj_conf_thresh']*normalized_counts[pred_sem_cls_max_indices[i]]
+        elif choose == 2:
+            threshold_new = config_dict['obj_conf_thresh'][pred_sem_cls_max_indices[i]+1]
+        if pred_mask[i] == 1 and obj_prob[i] > threshold_new and \
            pred_sem_cls_probs[i] > config_dict['cls_conf_thresh']:
             bbox_param = np.zeros((8))
             bbox_param[0:3] = pred_center[i]
@@ -178,6 +257,7 @@ def parse_prediction_to_pseudo_bboxes(end_points, config_dict, point_clouds):
         idx = np.argsort(-1 * np.array(conf_scores))
         pred_bboxes = np.stack(pred_bboxes, axis=0)
         pred_bboxes = pred_bboxes[idx]
+        # print('pred_bboxes', pred_bboxes)
         return pred_bboxes
 
 
@@ -306,13 +386,20 @@ def parse_predictions(end_points, config_dict):
     for i in range(bsize):
         if config_dict['per_class_proposal']:
             cur_list = []
+            # for ii in range(config_dict['dataset_config'].num_class_final):
+            #     cur_list += [(ii, pred_corners_3d_upright_camera[i,j], sem_cls_probs[i,j,ii]*obj_prob[i,j]) \
+            #         for j in range(pred_center.shape[1]) if pred_mask[i,j]==1 and obj_prob[i,j]>config_dict['conf_thresh']]
             for ii in range(config_dict['dataset_config'].num_class_final):
-                cur_list += [(ii, pred_corners_3d_upright_camera[i,j], sem_cls_probs[i,j,ii]*obj_prob[i,j]) \
-                    for j in range(pred_center.shape[1]) if pred_mask[i,j]==1 and obj_prob[i,j]>config_dict['conf_thresh']]
+                for j in range(pred_center.shape[1]):
+                    if pred_mask[i,j]==1 and obj_prob[i,j]>config_dict['conf_thresh']:
+                        cur_list += [(ii, pred_corners_3d_upright_camera[i,j], sem_cls_probs[i,j,ii]*obj_prob[i,j])]
             batch_pred_map_cls.append(cur_list)
         else:
-            batch_pred_map_cls.append([(pred_sem_cls[i,j].item(), pred_corners_3d_upright_camera[i,j], obj_prob[i,j]) \
-                for j in range(pred_center.shape[1]) if pred_mask[i,j]==1 and obj_prob[i,j]>config_dict['conf_thresh']])
+            # batch_pred_map_cls.append([(pred_sem_cls[i,j].item(), pred_corners_3d_upright_camera[i,j], obj_prob[i,j]) \
+            #     for j in range(pred_center.shape[1]) if pred_mask[i,j]==1 and obj_prob[i,j]>config_dict['conf_thresh']])
+            for j in range(pred_center.shape[1]):
+                if pred_mask[i,j]==1 and obj_prob[i,j]>config_dict['conf_thresh']:
+                    batch_pred_map_cls.append([(pred_sem_cls[i,j].item(), pred_corners_3d_upright_camera[i,j], obj_prob[i,j])])
     end_points['batch_pred_map_cls'] = batch_pred_map_cls
 
     return batch_pred_map_cls
@@ -388,6 +475,8 @@ class APCalculator(object):
         """
         
         bsize = len(batch_pred_map_cls)
+        print(bsize)
+        print(len(batch_gt_map_cls))
         assert(bsize == len(batch_gt_map_cls))
         for i in range(bsize):
             self.gt_map_cls[self.scan_cnt] = batch_gt_map_cls[i] 
@@ -399,13 +488,24 @@ class APCalculator(object):
         """
         rec, prec, ap = eval_det_multiprocessing(self.pred_map_cls, self.gt_map_cls, ovthresh=self.ap_iou_thresh, get_iou_func=get_iou_obb)
         ret_dict = {} 
+        # 36, 4, 10, 3, 5, 12, 16, 14, 8, 39, 11, 24, 28, 34
+        # self.class2type_map={36: 'bathtub', 4: 'bed', 10: 'bookshelf', 3: 'cabinet', 5: 'chair', 12: 'counter', 16: 'curtain', 14: 'desk', 8: 'door', 39: 'otherfurniture', 11: 'picture', 24: 'refrigerator', 28: 'showercurtain', 34: 'sink', 6: 'sofa' , 7: 'table', 33: 'toilet', 9: 'window'}
         for key in sorted(ap.keys()):
-            clsname = self.class2type_map[key] if self.class2type_map else str(key)
+            # print(self.class2type_map)
+            if key in self.class2type_map:
+                clsname = self.class2type_map[key]
+            else:
+                clsname = str(key)
+            # clsname = self.class2type_map[key] if self.class2type_map else str(key)
             ret_dict['%s Average Precision'%(clsname)] = ap[key]
         ret_dict['mAP'] = np.mean(list(ap.values()))
         rec_list = []
         for key in sorted(ap.keys()):
-            clsname = self.class2type_map[key] if self.class2type_map else str(key)
+            if key in self.class2type_map:
+                clsname = self.class2type_map[key]
+            else:
+                clsname = str(key)
+            # clsname = self.class2type_map[key] if self.class2type_map else str(key)
             try:
                 ret_dict['%s Recall'%(clsname)] = rec[key][-1]
                 rec_list.append(rec[key][-1])

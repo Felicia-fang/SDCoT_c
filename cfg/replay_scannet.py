@@ -1,12 +1,15 @@
 import os
 import numpy as np
+import random
+from collections import defaultdict
 import pickle
 from easydict import EasyDict
 import random
-
+# random.seed(10)
+import csv
 __C = EasyDict()
 cfg = __C
-
+percent_to_select=0.05
 __C.NUM_CLASSES = 18
 __C.DONOTCARE_CLASS_IDS = np.array([])
 __C.NYU40IDS = np.array([36, 4, 10, 3, 5, 12, 16, 14, 8, 39, 11, 24, 28, 34, 6, 7, 33, 9]) #the corresponding NYU40 ids of interested object class
@@ -44,8 +47,8 @@ __C.BASE_TYPES = ['bathtub', 'bed', 'bookshelf', 'cabinet', 'chair', 'counter', 
 __C.BASE_NYUIDS = np.array([36, 4, 10, 3, 5, 12, 16, 14, 8, 39, 11, 24, 28, 34,])
 
 __C.NUM_NOVEL_CLASSES = 4
-__C.NOVEL_TYPES = [ 'sofa', 'table','toilet', 'window']
-__C.NOVEL_NYUIDS = np.array([ 33, 9,6,7])
+__C.NOVEL_TYPES = [ 'bathtub', 'bed', 'bookshelf', 'cabinet', 'chair', 'counter', 'curtain', 'desk', 'door','otherfurniture', 'picture', 'refrigerator', 'showercurtain', 'sink','sofa', 'table','toilet', 'window']
+__C.NOVEL_NYUIDS = np.array([ 36, 4, 10, 3, 5, 12, 16, 14, 8, 39, 11, 24, 28, 34,33, 9,6,7])
 
 # __C.NUM_BASE_CLASSES = 9
 # __C.BASE_TYPES = ['bathtub', 'bed', 'bookshelf', 'cabinet', 'chair', 'counter', 'curtain', 'desk', 'door']
@@ -54,7 +57,30 @@ __C.NOVEL_NYUIDS = np.array([ 33, 9,6,7])
 # __C.NUM_NOVEL_CLASSES = 9
 # __C.NOVEL_TYPES = ['otherfurniture', 'picture', 'refrigerator', 'showercurtain', 'sink', 'sofa', 'table', 'toilet', 'window']
 # __C.NOVEL_NYUIDS = np.array([39, 11, 24, 28, 34, 6, 7, 33, 9])
+def transform_data(data):
+    new_data = {}
+    for key, values in data.items():
+        for value in values:
+            if value in new_data:
+                new_data[value][key] = 1
+            else:
+                new_data[value] = {k: 0 for k in data.keys()}
+                new_data[value][key] = 1
+    return new_data
 
+# 函数：随机选择5%的数据
+def select_random_samples(data, percent_to_select):
+    all_samples = list(data.keys())
+    selected_samples = random.sample(all_samples, int(len(all_samples) * percent_to_select))
+    return {sample: data[sample] for sample in selected_samples}
+
+# 函数：计算每个键对应的值的总和
+def calculate_totals(selected_data):
+    totals = defaultdict(int)
+    for sample_data in selected_data.values():
+        for key, value in sample_data.items():
+            totals[key] += value
+    return totals
 def get_class2scans(data_path, split='train'):
     '''Generate a mapping dictionary whose key is the class name and the values are the corresponding scan names
        containing objects of this class
@@ -62,23 +88,85 @@ def get_class2scans(data_path, split='train'):
     index_data_path = os.path.join(data_path, 'index_data')
     class2scans_file = os.path.join(index_data_path, '%s_class2scans.pkl' %split)
     if not os.path.exists(index_data_path): os.mkdir(index_data_path)
-
-    if os.path.exists(class2scans_file):
+    if os.path.exists("0.05scannet_scene"):
+        print("1")
+        with open("0.05scannet_scene", 'rb') as f:
+            class2scans = pickle.load(f)
+            for class_name in __C.TYPE_WHITELIST:
+                print('\t class_name: {0} | num of scans: {1}'.format(class_name, len(class2scans[class_name])))      
+            print(class2scans)     
+    elif os.path.exists(class2scans_file):
         with open(class2scans_file, 'rb') as f:
             class2scans = pickle.load(f)
-            # print(class2scans)
-            keys_to_process = ['bathtub', 'bed', 'bookshelf', 'cabinet', 'chair', 'counter', 'curtain', 'desk', 'door','otherfurniture']
-            new_data = {}
-            for key in keys_to_process:
-                original_list = class2scans[key]
-                sample_size = int(0.05 * len(original_list))
-                random_sample = random.sample(original_list, sample_size)
-                new_data[key] = random_sample
-            for key in new_data:
-                class2scans[key] = new_data[key]
             for class_name in __C.TYPE_WHITELIST:
                 print('\t class_name: {0} | num of scans: {1}'.format(class_name, len(class2scans[class_name])))
             # print(class2scans)
+            # keys_to_process = ['bathtub', 'bed', 'bookshelf', 'cabinet', 'chair', 'counter', 'curtain', 'desk', 'door','otherfurniture']
+            # new_data = {}
+            # for key in keys_to_process:
+            #     original_list = class2scans[key]
+            #     sample_size = int(0.05 * len(original_list))
+            #     random_sample = random.sample(original_list, sample_size)
+            #     new_data[key] = random_sample
+            # for key in new_data:
+            #     class2scans[key] = new_data[key]
+            # for class_name in __C.TYPE_WHITELIST:
+            #     print('\t class_name: {0} | num of scans: {1}'.format(class_name, len(class2scans[class_name])))
+            # csv_filename = '0.05scannet2.csv'
+            # with open(csv_filename, mode='w', newline='') as csv_file:
+            #     writer = csv.writer(csv_file)
+    
+            #     header = class2scans.keys()
+            #     writer.writerow(header)
+    
+            #     max_data_length = max(len(class2scans[key]) for key in class2scans.keys())
+            #     for i in range(max_data_length):
+            #         row = [class2scans[key][i] if i < len(class2scans[key]) else '' for key in header]
+            #         writer.writerow(row)
+            # print(class2scans)
+            selected_data = {}
+            while True:
+                # 步骤1：将数据转换成新字典的格式
+                new_data = transform_data(class2scans)
+                
+                # 清空选择的数据
+                selected_data = {}
+                
+                # 步骤2：随机选择5%的数据
+                selected_data = select_random_samples(new_data, percent_to_select)
+                
+                # 步骤3：计算每个键对应的值的总和
+                totals = calculate_totals(selected_data)
+                
+                # 步骤4：检查是否满足条件（每个键对应的值都大于0）
+                if all(value > 0 for value in totals.values()):
+                    break
+
+            # 打印每个键对应的值的总和
+            print(selected_data)
+            # 初始化一个空的新字典，用于存储转换后的数据
+            converted_data = {key: [] for key in class2scans.keys()}
+
+            # 遍历最终生成的字典
+            for sample, values in selected_data.items():
+                # 遍历每个键
+                for key, value in values.items():
+                    # 如果值为1，将该样本添加到相应的键中
+                    if value == 1:
+                        converted_data[key].append(sample)
+            converted_data['sofa']=class2scans['sofa']
+            converted_data['table']=class2scans['table']
+            converted_data['toilet']=class2scans['toilet']
+            converted_data['window']=class2scans['window']
+
+            # 打印转换后的数据
+            print(converted_data)        
+            with open("0.05scannet_scene", 'wb') as f:
+                pickle.dump(converted_data, f, pickle.HIGHEST_PROTOCOL)
+            for class_name in __C.TYPE_WHITELIST:
+                print('\t class_name: {0} | num of scans: {1}'.format(class_name, len(converted_data[class_name])))
+
+
     else:
         class2scans = {c: [] for c in __C.TYPE_WHITELIST}
         all_scan_names = list(set([os.path.basename(x)[0:12] \
