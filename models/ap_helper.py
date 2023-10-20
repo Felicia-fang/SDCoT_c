@@ -236,7 +236,7 @@ def parse_prediction_to_pseudo_bboxes(end_points, config_dict, point_clouds):
     for i in range(K):
         # print("thresh",config_dict['obj_conf_thresh']*normalized_counts[pred_sem_cls_max_indices[i]])
         if choose==0:
-            threshold_new=0
+            threshold_new=config_dict['obj_conf_thresh']
         elif choose == 1:
             threshold_new=config_dict['obj_conf_thresh']*normalized_counts[pred_sem_cls_max_indices[i]]
         elif choose == 2:
@@ -386,20 +386,20 @@ def parse_predictions(end_points, config_dict):
     for i in range(bsize):
         if config_dict['per_class_proposal']:
             cur_list = []
-            # for ii in range(config_dict['dataset_config'].num_class_final):
-            #     cur_list += [(ii, pred_corners_3d_upright_camera[i,j], sem_cls_probs[i,j,ii]*obj_prob[i,j]) \
-            #         for j in range(pred_center.shape[1]) if pred_mask[i,j]==1 and obj_prob[i,j]>config_dict['conf_thresh']]
             for ii in range(config_dict['dataset_config'].num_class_final):
-                for j in range(pred_center.shape[1]):
-                    if pred_mask[i,j]==1 and obj_prob[i,j]>config_dict['conf_thresh']:
-                        cur_list += [(ii, pred_corners_3d_upright_camera[i,j], sem_cls_probs[i,j,ii]*obj_prob[i,j])]
+                cur_list += [(ii, pred_corners_3d_upright_camera[i,j], sem_cls_probs[i,j,ii]*obj_prob[i,j]) \
+                    for j in range(pred_center.shape[1]) if pred_mask[i,j]==1 and obj_prob[i,j]>config_dict['conf_thresh']]
+            # for ii in range(config_dict['dataset_config'].num_class_final):
+            #     for j in range(pred_center.shape[1]):
+            #         if pred_mask[i,j]==1 and obj_prob[i,j]>config_dict['conf_thresh']:
+            #             cur_list += [(ii, pred_corners_3d_upright_camera[i,j], sem_cls_probs[i,j,ii]*obj_prob[i,j])]
             batch_pred_map_cls.append(cur_list)
         else:
-            # batch_pred_map_cls.append([(pred_sem_cls[i,j].item(), pred_corners_3d_upright_camera[i,j], obj_prob[i,j]) \
-            #     for j in range(pred_center.shape[1]) if pred_mask[i,j]==1 and obj_prob[i,j]>config_dict['conf_thresh']])
-            for j in range(pred_center.shape[1]):
-                if pred_mask[i,j]==1 and obj_prob[i,j]>config_dict['conf_thresh']:
-                    batch_pred_map_cls.append([(pred_sem_cls[i,j].item(), pred_corners_3d_upright_camera[i,j], obj_prob[i,j])])
+            batch_pred_map_cls.append([(pred_sem_cls[i,j].item(), pred_corners_3d_upright_camera[i,j], obj_prob[i,j]) \
+                for j in range(pred_center.shape[1]) if pred_mask[i,j]==1 and obj_prob[i,j]>config_dict['conf_thresh']])
+            # for j in range(pred_center.shape[1]):
+            #     if pred_mask[i,j]==1 and obj_prob[i,j]>config_dict['conf_thresh']:
+            #         batch_pred_map_cls.append([(pred_sem_cls[i,j].item(), pred_corners_3d_upright_camera[i,j], obj_prob[i,j])])
     end_points['batch_pred_map_cls'] = batch_pred_map_cls
 
     return batch_pred_map_cls

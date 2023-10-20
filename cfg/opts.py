@@ -34,7 +34,7 @@ def parse_args():
 
     # basic learning settings
     parser.add_argument('--n_epochs', type=int, default=150, help='Number of epochs for training')
-    parser.add_argument('--batch_size', type=int, default=8, help='Batch Size during base training')
+    parser.add_argument('--batch_size', type=int, default=1, help='Batch Size during base training')
     parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
     parser.add_argument('--lr_decay_steps', default='80,120', help='When to decay the learning rate (in epochs)')
     parser.add_argument('--lr_decay_rate', type=float, default=0.1, help='Decay rates for lr decay')

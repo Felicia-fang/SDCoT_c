@@ -142,7 +142,9 @@ __C.MEAN_COLOR_RGB = np.array([109.8, 97.2, 83.8])
 __C.NUM_BASE_CLASSES = 14
 __C.BASE_TYPES = ['bathtub', 'bed', 'bookshelf', 'cabinet', 'chair', 'counter', 'curtain', 'desk', 'door','otherfurniture', 'picture', 'refrigerator', 'showercurtain', 'sink']
 __C.BASE_NYUIDS = np.array([36, 4, 10, 3, 5, 12, 16, 14, 8, 39, 11, 24, 28, 34,])
-
+# __C.NUM_BASE_CLASSES = 18
+# __C.BASE_TYPES = ['bathtub', 'bed', 'bookshelf', 'cabinet', 'chair', 'counter', 'curtain', 'desk', 'door','otherfurniture', 'picture', 'refrigerator', 'showercurtain', 'sink','sofa', 'table', 'toilet', 'window']
+# __C.BASE_NYUIDS = np.array([36, 4, 10, 3, 5, 12, 16, 14, 8, 39, 11, 24, 28, 34,6, 7, 33, 9])
 __C.NUM_NOVEL_CLASSES = 18
 __C.NOVEL_TYPES = [ 'sofa', 'table','toilet', 'window','bathtub', 'bed', 'bookshelf', 'cabinet', 'chair', 'counter', 'curtain', 'desk', 'door','otherfurniture', 'picture', 'refrigerator', 'showercurtain', 'sink']
 __C.NOVEL_NYUIDS = np.array([ 33, 9,6,7,36, 4, 10, 3, 5, 12, 16, 14, 8, 39, 11, 24, 28, 34])

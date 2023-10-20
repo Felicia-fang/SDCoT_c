@@ -1,9 +1,3 @@
-""" Evaluation phase for incremental 3D object detection.
-
-Author: Zhao Na
-Date: Oct, 2020
-"""
-
 import os
 import sys
 import numpy as np
@@ -39,34 +33,43 @@ def evaluate(args, model, dataloader, logger, device, dataset_config):
     stat_dict = {}
     model.eval()  # set model to eval mode (for bn and dp)
     for batch_idx, batch_data_label in enumerate(dataloader):
+        # if batch_idx != -1:
+        if batch_idx == 0:
+            # print('batch_idx: ', batch_idx)
 
-        if batch_idx % 50 == 0:
-            print('Eval batch: %d' % (batch_idx))
+            if batch_idx % 50 == 0:
+                print('Eval batch: %d' % (batch_idx))
 
-        for key in batch_data_label:
-            batch_data_label[key] = batch_data_label[key].to(device)
+            for key in batch_data_label:
+                batch_data_label[key] = batch_data_label[key].to(device)
 
-        # Forward pass
-        with torch.no_grad():
-            end_points = model(batch_data_label['point_clouds'])
+            # Forward pass
+            with torch.no_grad():
+                end_points = model(batch_data_label['point_clouds'])
 
-        # Compute loss
-        for key in batch_data_label:
-            assert (key not in end_points)
-            end_points[key] = batch_data_label[key]
-        loss, end_points = get_supervised_loss(end_points, dataset_config)
+            # Compute loss
+            for key in batch_data_label:
+                assert (key not in end_points)
+                end_points[key] = batch_data_label[key]
+            loss, end_points = get_supervised_loss(end_points, dataset_config)
 
-        # Accumulate statistics and print out
-        for key in end_points:
-            if 'loss' in key or 'acc' in key or 'ratio' in key:
-                if key not in stat_dict: stat_dict[key] = 0
-                stat_dict[key] += end_points[key].item()
+            # Accumulate statistics and print out
+            for key in end_points:
+                if 'loss' in key or 'acc' in key or 'ratio' in key:
+                    if key not in stat_dict: stat_dict[key] = 0
+                    stat_dict[key] += end_points[key].item()
 
-        
-        batch_pred_map_cls = parse_predictions(end_points, CONFIG_DICT)
-        batch_gt_map_cls = parse_groundtruths(end_points, CONFIG_DICT)
-        # import pdb; pdb.set_trace()
-        ap_calculator.step(batch_pred_map_cls, batch_gt_map_cls)
+            batch_pred_map_cls = parse_predictions(end_points, CONFIG_DICT)
+            print('batch_pred_map_cls: ', batch_pred_map_cls)
+            base_pred_map_cls_thresh = [item for sublist in batch_pred_map_cls for item in sublist if item[-1] > 0.95]
+            base_pred_map_cls_thresh=[base_pred_map_cls_thresh]
+            print(  'base_pred_map_cls_thresh: ', base_pred_map_cls_thresh)
+            batch_gt_map_cls = parse_groundtruths(end_points, CONFIG_DICT)
+            print('batch_gt_map_cls: ', batch_gt_map_cls)
+            ap_calculator.step(base_pred_map_cls_thresh, batch_gt_map_cls)
+            # ap_calculator.step(batch_pred_map_cls, batch_gt_map_cls)
+        else:
+            break
 
     # log statstics
     for key in sorted(stat_dict.keys()):
@@ -75,7 +78,7 @@ def evaluate(args, model, dataloader, logger, device, dataset_config):
     # Evaluate average precision
     metrics_dict = ap_calculator.compute_metrics()
     for key in metrics_dict:
-        logger.cprint('eval %s: %f' % (key, metrics_dict[key]))
+        logger.cprint('t=0.95,eval %s: %f' % (key, metrics_dict[key]))
 
 
 def main(args):

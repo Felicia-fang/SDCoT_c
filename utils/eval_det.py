@@ -139,7 +139,9 @@ def eval_det_cls(pred, gt, ovthresh=0.25, use_07_metric=False, get_iou_func=get_
                     jmax = j
 
         #print d, ovmax
-        if ovmax > ovthresh:
+        # print(ovmax)
+        # if ovmax > ovthresh:
+        if ovmax > 0.25:
             if not R['det'][jmax]:
                 tp[d] = 1.
                 R['det'][jmax] = 1
